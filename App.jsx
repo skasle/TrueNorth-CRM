@@ -13,20 +13,20 @@ import { db, auth } from './firebase'
 // TODO: Replace with actual TrueNorth team emails before going live
 
 const ALLOWED_EMAILS = [
-  'agustin@truenorth.example',     // TODO: real email
-  'ceo@truenorth.example',         // TODO: real email
-  // keep 8/0 admins during build-out
-  'samkasle@gmail.com',
-  'sam@eightbyzero.com',
+ 'agustin@truenorth.co',
+'matt@valtnetwork.com',
+'cyrus@truenorth.co',
+'soul.htite@gmail.com',
+'samkasle@gmail.com',
+  'agonikman@truenorth.co'
+  
 ]
 const ADMIN_EMAILS = [
-  'sam@eightbyzero.com',
-  'samkasle@gmail.com',
-  'agustin@truenorth.example',     // TODO: real email
+  'samkasle@gmail.com',     // TODO: real email
 ]
 
 // Team members shown in the Owner dropdown
-const OWNERS = ['Agustin', 'CEO']  // TODO: update with real TrueNorth team
+const OWNERS = ['Agustin']  // TODO: update with real TrueNorth team
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
