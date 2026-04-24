@@ -10,23 +10,22 @@ import Papa from 'papaparse'
 import { db, auth } from './firebase'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
-// TODO: Replace with actual TrueNorth team emails before going live
 
 const ALLOWED_EMAILS = [
- 'agustin@truenorth.co',
-'matt@valtnetwork.com',
-'cyrus@truenorth.co',
-'soul.htite@gmail.com',
-'samkasle@gmail.com',
-  'agonikman@truenorth.co'
-  
-]
-const ADMIN_EMAILS = [
-  'samkasle@gmail.com',     // TODO: real email
+  'samkasle@gmail.com',
+  'agustin@truenorth.co',
+  'agonikman@truenorth.co',
+  'cyrus@truenorth.co',
+  'matt@valtnetwork.com',
+  'soul.htite@gmail.com',
 ]
 
-// Team members shown in the Owner dropdown
-const OWNERS = ['Agustin']  // TODO: update with real TrueNorth team
+const ADMIN_EMAILS = [
+  'samkasle@gmail.com',
+]
+
+// Team members shown in the Owner dropdown and filter pills
+const OWNERS = ['Sam', 'Cyrus', 'Matt', 'Soul', 'Alex']
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
