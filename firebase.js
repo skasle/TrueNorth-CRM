@@ -2,13 +2,15 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 
+// TrueNorth CRM — replace with values from new Firebase project
+// Firebase Console → Project Settings → General → Your apps → SDK setup
 const firebaseConfig = {
-  projectId: 'by0-crm',
-  appId: '1:913097673123:web:1ed1cd73553aa1c289f216',
-  storageBucket: 'by0-crm.firebasestorage.app',
-  apiKey: 'AIzaSyCwWARSw5wmkCbEiBL3IqsYy8PuxK5pQWw',
-  authDomain: 'by0-crm.firebaseapp.com',
-  messagingSenderId: '913097673123',
+  apiKey: 'REPLACE_ME',
+  authDomain: 'truenorth-crm.firebaseapp.com',
+  projectId: 'truenorth-crm',
+  storageBucket: 'truenorth-crm.appspot.com',
+  messagingSenderId: 'REPLACE_ME',
+  appId: 'REPLACE_ME',
 }
 
 const app = initializeApp(firebaseConfig)
