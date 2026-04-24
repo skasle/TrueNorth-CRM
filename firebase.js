@@ -1,18 +1,21 @@
-import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
-import { getAuth } from 'firebase/auth'
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-// TrueNorth CRM — replace with values from new Firebase project
-// Firebase Console → Project Settings → General → Your apps → SDK setup
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'truenorth-crm.firebaseapp.com',
-  projectId: 'truenorth-crm',
-  storageBucket: 'truenorth-crm.appspot.com',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME',
-}
+  apiKey: "AIzaSyCrxolUvkmXHvJCdtf_GZxEiwXOafL2k8Y",
+  authDomain: "truenorth-crm-c6ac5.firebaseapp.com",
+  projectId: "truenorth-crm-c6ac5",
+  storageBucket: "truenorth-crm-c6ac5.firebasestorage.app",
+  messagingSenderId: "737132504974",
+  appId: "1:737132504974:web:d65cc501f859daaecae6df",
+  measurementId: "G-WLRP9SCBY9"
+};
 
-const app = initializeApp(firebaseConfig)
-export const db = getFirestore(app)
-export const auth = getAuth(app)
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
