@@ -1,4 +1,3 @@
-import Partner from './Partner'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc,
@@ -11,110 +10,38 @@ import Papa from 'papaparse'
 import { db, auth } from './firebase'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
+// TODO: Replace with actual TrueNorth team emails before going live
 
 const ALLOWED_EMAILS = [
-  'sam@eightbyzero.com', 'jp@eightbyzero.com',
-  'samkasle@gmail.com', 'jpcarmona7@gmail.com',
-  'steve@diagram.vc', 'dmcmaster@munichre.com', 'gaurav@diagram.vc'
+  'agustin@truenorth.example',     // TODO: real email
+  'ceo@truenorth.example',         // TODO: real email
+  // keep 8/0 admins during build-out
+  'samkasle@gmail.com',
+  'sam@eightbyzero.com',
 ]
-const ADMIN_EMAILS = ['sam@eightbyzero.com', 'samkasle@gmail.com']
+const ADMIN_EMAILS = [
+  'sam@eightbyzero.com',
+  'samkasle@gmail.com',
+  'agustin@truenorth.example',     // TODO: real email
+]
 
-// ── CRM Configs ──────────────────────────────────────────────────────────────
+// Team members shown in the Owner dropdown
+const OWNERS = ['Agustin', 'CEO']  // TODO: update with real TrueNorth team
+
+// ── Config ───────────────────────────────────────────────────────────────────
 
 const TIERS = ['A', 'B', 'C', 'D']
 const TIER_COLORS = { 'A': '#43d981', 'B': '#4f8ef7', 'C': '#f2b84b', 'D': '#7a8ba8' }
 const TIER_ORDER = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 }
 
-const INVESTOR = {
-  key: 'investor',
-  label: 'Investor Pipeline',
-  collection: 'investors',
-  statuses: ['Terms', 'SIP', 'Intro', 'Reach Out', 'Research', 'HOLD', 'Nurture', 'Declined', 'Nothing'],
-  statusOrder: { 'Terms':0, 'SIP':1, 'Intro':2, 'Reach Out':3, 'Research':4, 'HOLD':5, 'Nurture':6, 'Declined':7, 'Nothing':8 },
-  statusColors: {
-    'Terms':'#43d981', 'SIP':'#f2b84b', 'Intro':'#26c4aa', 'Reach Out':'#4f8ef7',
-    'Research':'#f28b4b', 'HOLD':'#7a8ba8', 'Nurture':'#a155e8', 'Declined':'#e85454', 'Nothing':'#3d4a5f',
-  },
-  pipelineStages: [
-    { key: 'Research', color: '#f28b4b' }, { key: 'Reach Out', color: '#4f8ef7' },
-    { key: 'Intro', color: '#26c4aa' }, { key: 'SIP', color: '#f2b84b' }, { key: 'Terms', color: '#43d981' },
-  ],
-  categoryPills: ['Diagram', 'ITC', 'JP', 'Sam'],
-  categoryField: 'source',
-  categoryLabel: 'source',
-  getName: (inv) => [inv.firstName, inv.lastName].filter(Boolean).join(' ') || inv.name || '(unnamed)',
-  columns: [
-    { key: 'tier', label: 'Tier', sort: 'tierPriority' },
-    { key: 'priority', label: 'Pri', sort: 'priority' },
-    { key: 'name', label: 'Name', sort: 'name' },
-    { key: 'firm', label: 'Firm', sort: 'firm' },
-    { key: 'status', label: 'Status', sort: 'status' },
-    { key: 'followUp', label: 'Follow Up', sort: 'followUp' },
-    { key: 'source', label: 'Source', sort: 'source' },
-    { key: 'captainsLog', label: "Captain's Log" },
-  ],
-  csvFieldMap: {
-    'ContactID':'contactId', 'FirmID':'firmId', 'Tier':'tier', 'Priority':'priority',
-    'First Name':'firstName', 'Last Name':'lastName', 'Firm':'firm', 'Status':'status',
-    'Follow Up':'followUp', 'Captains Log':'captainsLog', 'Owner':'owner', 'Source':'source',
-    'Position':'position', 'Insurtech investor?':'insurtechInvestor', 'Seed investor?':'seedInvestor',
-    'LinkedIn':'linkedIn', 'Location':'location', 'Business Email1':'businessEmail1',
-    'Business Email2':'businessEmail2', 'Personal Email1':'personalEmail1',
-    'Personal Email2':'personalEmail2', 'Email':'email',
-  },
-  csvDocIdFields: ['ContactID', 'contactId'],
-  csvSkipCheck: (row) => !(row['Firm'] || '').trim() && !(row['First Name'] || row['firstName'] || '').trim(),
-  exportHeaders: ['contactId','firmId','tier','priority','firstName','lastName','firm','email','businessEmail1','status','followUp','owner','source','position','location','linkedIn','captainsLog'],
-  editFields: (form, set) => (<>
-    <div className="field-row">
-      <FG label="First Name"><input value={form.firstName||''} onChange={e=>set('firstName',e.target.value)} placeholder="Jane" /></FG>
-      <FG label="Last Name"><input value={form.lastName||''} onChange={e=>set('lastName',e.target.value)} placeholder="Smith" /></FG>
-    </div>
-    <FG label="Firm"><input value={form.firm||''} onChange={e=>set('firm',e.target.value)} placeholder="Acme Ventures" /></FG>
-    <FG label="Email"><input type="email" value={form.email||''} onChange={e=>set('email',e.target.value)} placeholder="jane@acme.vc" /></FG>
-  </>),
-  editFields2: (form, set, STATUSES_LIST) => (<>
-    <div className="field-row">
-      <FG label="Source"><input value={form.source||''} onChange={e=>set('source',e.target.value)} placeholder="Diagram / ITC / JP" /></FG>
-      <FG label="LinkedIn"><input value={form.linkedIn||''} onChange={e=>set('linkedIn',e.target.value)} placeholder="linkedin.com/in/..." /></FG>
-    </div>
-  </>),
-  initForm: (inv) => ({
-    firstName: inv.firstName || inv.name?.split(' ')[0] || '',
-    lastName: inv.lastName || inv.name?.split(' ').slice(1).join(' ') || '',
-    firm: inv.firm || '',
-    email: inv.email || inv.businessEmail1 || '',
-    status: inv.status || '',
-    followUp: inv.followUp || '',
-    owner: inv.owner || '',
-    source: inv.source || '',
-    tier: inv.tier || '',
-    priority: inv.priority || '',
-    linkedIn: inv.linkedIn || '',
-    captainsLog: inv.captainsLog || '',
-  }),
-  renderCell: (inv, col, cfg) => {
-    if (col.key === 'tier') {
-      const tc = TIER_COLORS[inv.tier] || '#3d4a5f'
-      return inv.tier ? <span className="tier-badge" style={{color:tc,borderColor:tc+'44',background:tc+'14'}}>{inv.tier}</span> : <span className="td-muted">—</span>
-    }
-    if (col.key === 'priority') return inv.priority || <span className="td-muted">—</span>
-    if (col.key === 'name') return cfg.getName(inv)
-    if (col.key === 'firm') return inv.firm || '—'
-    if (col.key === 'status') {
-      const c = cfg.statusColors[inv.status] || '#7a8ba8'
-      return <span className="badge" style={{color:c,background:c+'18',borderColor:c+'44'}}>{inv.status||'Unset'}</span>
-    }
-    if (col.key === 'followUp') return inv.followUp || '—'
-    if (col.key === 'source') return inv.source || '—'
-    if (col.key === 'captainsLog') { const l = inv.captainsLog||''; return l.length > 55 ? l.slice(0,55)+'…' : l || '—' }
-    return inv[col.key] || '—'
-  },
-}
+const COMPANY_TYPES = [
+  'Bank', 'Credit Union', 'Fintech Lender', 'BaaS Platform',
+  'Embedded Finance', 'Specialty Finance', 'Wealth Platform',
+  'Consultant', 'Partner', 'Other',
+]
 
-const COMMERCIAL = {
-  key: 'commercial',
-  label: 'Commercial Pipeline',
+const CRM = {
+  label: 'TrueNorth Pipeline',
   collection: 'commercial',
   statuses: ['7 - WON!', '4 - Agreement', '3 - SIP', '2 - Pitch', '1 - Intro Meeting', '0 - Outreach', '-1 - Research', '5 - Nurture', '-6 - Lost'],
   statusOrder: { '7 - WON!':0, '4 - Agreement':1, '3 - SIP':2, '2 - Pitch':3, '1 - Intro Meeting':4, '0 - Outreach':5, '-1 - Research':6, '5 - Nurture':7, '-6 - Lost':8 },
@@ -129,7 +56,7 @@ const COMMERCIAL = {
     { key: '3 - SIP', color: '#f2b84b' }, { key: '4 - Agreement', color: '#26c4aa' },
     { key: '7 - WON!', color: '#43d981' },
   ],
-  categoryPills: ['Carriers', 'TPAs', 'Broker', 'Consultants'],
+  categoryPills: ['Bank', 'Credit Union', 'Fintech Lender', 'BaaS Platform'],
   categoryField: 'type',
   categoryLabel: 'type',
   getName: (inv) => inv.company || inv.Company || '(unnamed)',
@@ -155,13 +82,13 @@ const COMMERCIAL = {
   csvSkipCheck: (row) => !(row['Company'] || row['company'] || '').trim() && !(row['Target names'] || row['targetNames'] || '').trim(),
   exportHeaders: ['contactId','tier','priority','company','targetNames','type','geo','owner','status','followUp','intro','activeIntro','orgDescription','notes'],
   editFields: (form, set) => (<>
-    <FG label="Company"><input value={form.company||''} onChange={e=>set('company',e.target.value)} placeholder="Acme Insurance" /></FG>
+    <FG label="Company"><input value={form.company||''} onChange={e=>set('company',e.target.value)} placeholder="Acme Bank" /></FG>
     <div className="field-row">
       <FG label="Target Names"><input value={form.targetNames||''} onChange={e=>set('targetNames',e.target.value)} placeholder="Jane Smith, Bob Jones" /></FG>
       <FG label="Type">
         <select value={form.type||''} onChange={e=>set('type',e.target.value)}>
           <option value="">— Unset —</option>
-          {['Carriers','TPAs','Broker','Consultants','Advisor','PEOs','Partners (other)','Reinsurer','Vendors','EORs','EAPs'].map(t=><option key={t} value={t}>{t}</option>)}
+          {COMPANY_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
         </select>
       </FG>
     </div>
@@ -209,13 +136,11 @@ const COMMERCIAL = {
       return <span className="badge" style={{color:c,background:c+'18',borderColor:c+'44'}}>{inv.status||'Unset'}</span>
     }
     if (col.key === 'followUp') return inv.followUp || '—'
-    if (col.key === 'owner') return (inv.owner||'').toUpperCase() || '—'
+    if (col.key === 'owner') return (inv.owner||'') || '—'
     if (col.key === 'notes') { const n = inv.notes||''; return n.length > 50 ? n.slice(0,50)+'…' : n || '—' }
     return inv[col.key] || '—'
   },
 }
-
-const CRM_CONFIGS = { investor: INVESTOR, commercial: COMMERCIAL }
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
@@ -251,11 +176,9 @@ function tierPrioritySort(a, b) {
 
 // ── Main App ─────────────────────────────────────────────────────────────────
 
-  export default function App() {
-  if (window.location.pathname === '/partner') return <Partner />
+export default function App() {
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [crmMode, setCrmMode] = useState('investor')
 
   useEffect(() => onAuthStateChanged(auth, (u) => {
     if (u && ALLOWED_EMAILS.includes(u.email)) setUser(u)
@@ -267,16 +190,12 @@ function tierPrioritySort(a, b) {
   if (authLoading) return <div className="auth-loading"><div className="spinner" /></div>
   if (!user) return <AuthScreen />
 
-  const cfg = CRM_CONFIGS[crmMode]
   const initials = (user.displayName || user.email).split(/[\s@]+/).filter(Boolean).map(s=>s[0]).join('').slice(0,2).toUpperCase()
 
   return (
     <div className="app">
       <nav className="crm-nav">
-        {Object.values(CRM_CONFIGS).map(c => (
-          <button key={c.key} className={`crm-nav-btn ${crmMode === c.key ? 'active' : ''}`}
-            onClick={() => setCrmMode(c.key)}>{c.label}</button>
-        ))}
+        <div className="crm-nav-brand">TrueNorth CRM</div>
         <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:6}}>
           <div className="user-chip">
             {user.photoURL ? <img className="user-avatar" src={user.photoURL} width={26} height={26} style={{borderRadius:'50%'}} /> : <div className="user-initials">{initials}</div>}
@@ -285,12 +204,12 @@ function tierPrioritySort(a, b) {
           <button className="btn-sm" onClick={() => signOut(auth)}>Sign out</button>
         </div>
       </nav>
-      <CRMView key={crmMode} cfg={cfg} user={user} />
+      <CRMView cfg={CRM} user={user} />
     </div>
   )
 }
 
-// ── CRM View (shared, config-driven) ─────────────────────────────────────────
+// ── CRM View ─────────────────────────────────────────────────────────────────
 
 function CRMView({ cfg, user }) {
   const [investors, setInvestors] = useState([])
@@ -308,24 +227,24 @@ function CRMView({ cfg, user }) {
   const [toasts, setToasts] = useState([])
   const searchRef = useRef(null)
 
+  const toast = useCallback((msg, type='success') => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, msg, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
+  }, [])
+
   useEffect(() => {
     setLoading(true)
     getDocs(collection(db, cfg.collection))
       .then(snap => setInvestors(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
       .catch(e => toast('Load error: ' + e.message, 'error'))
       .finally(() => setLoading(false))
-  }, [cfg.collection])
+  }, [cfg.collection, toast])
 
   useEffect(() => {
     const fn = (e) => { if ((e.metaKey||e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchRef.current?.focus() } }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)
-  }, [])
-
-  const toast = useCallback((msg, type='success') => {
-    const id = Date.now()
-    setToasts(prev => [...prev, { id, msg, type }])
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
   }, [])
 
   const filtered = useMemo(() => {
@@ -337,7 +256,7 @@ function CRMView({ cfg, user }) {
         (statusFilter === 'Unset' ? !inv.status || !cfg.statuses.includes(inv.status) : inv.status === statusFilter)
       const owner = (inv.owner||'').toLowerCase()
       const matchOwner = ownerFilter === 'ANY' ||
-        (ownerFilter === 'Sam' ? owner === 'sam' : ownerFilter === 'JP' ? owner === 'jp' : ownerFilter === 'Unowned' ? !inv.owner : true)
+        (ownerFilter === 'Unowned' ? !inv.owner : owner === ownerFilter.toLowerCase())
       const matchTier = tierFilter === 'ANY' || (tierFilter === 'Untiered' ? !inv.tier : inv.tier === tierFilter)
       const catVal = (inv[cfg.categoryField]||'').toLowerCase()
       const matchCat = catFilter === 'ANY' ||
@@ -406,6 +325,17 @@ function CRMView({ cfg, user }) {
     } catch (e) { toast('Error: ' + e.message, 'error') }
   }
 
+  const exportCSV = (prefix) => {
+    const label = prefix || 'truenorth-pipeline'
+    const rows = investors.map(inv => cfg.exportHeaders.map(h => `"${(inv[h]||'').toString().replace(/"/g,'""')}"`).join(','))
+    const csv = [cfg.exportHeaders.join(','), ...rows].join('\n')
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+      download: `${label}-${new Date().toISOString().slice(0,10)}.csv`,
+    })
+    a.click(); URL.revokeObjectURL(a.href)
+  }
+
   const importCSV = (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -438,17 +368,6 @@ function CRMView({ cfg, user }) {
       error: (err) => toast('CSV error: ' + err.message, 'error'),
     })
     e.target.value = ''
-  }
-
-  const exportCSV = (prefix) => {
-    const label = prefix || cfg.key
-    const rows = investors.map(inv => cfg.exportHeaders.map(h => `"${(inv[h]||'').toString().replace(/"/g,'""')}"`).join(','))
-    const csv = [cfg.exportHeaders.join(','), ...rows].join('\n')
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
-      download: `${label}-${new Date().toISOString().slice(0,10)}.csv`,
-    })
-    a.click(); URL.revokeObjectURL(a.href)
   }
 
   const sortBy = (key) => { setSortDir(prev => sortKey === key ? prev * -1 : 1); setSortKey(key) }
@@ -504,7 +423,7 @@ function CRMView({ cfg, user }) {
             onClick={()=>setTierFilter('ANY')}>Any tier</button>
         </div>
         <div className="owner-pills">
-          {['Sam','JP','Unowned'].map(o => (
+          {[...OWNERS, 'Unowned'].map(o => (
             <button key={o} className={`pill ${ownerFilter===o?'pill-active':''}`}
               onClick={()=>setOwnerFilter(prev=>prev===o?'ANY':o)}>{o}</button>
           ))}
@@ -549,14 +468,14 @@ function AuthScreen() {
   }
   return (
     <div className="auth-screen"><div className="auth-card">
-      <div className="auth-logo">8/0 CRM</div>
-      <p className="auth-sub">Sign in with your 8/0 Google account.</p>
+      <div className="auth-logo">TrueNorth CRM</div>
+      <p className="auth-sub">Sign in with your TrueNorth Google account.</p>
       <button className="btn-google" onClick={signIn}>
         <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
         Continue with Google
       </button>
       {err && <p className="auth-err">{err}</p>}
-      <p className="auth-note">Restricted to 8/0 team accounts.</p>
+      <p className="auth-note">Restricted to TrueNorth team accounts.</p>
     </div></div>
   )
 }
@@ -584,9 +503,8 @@ function TableView({ investors, cfg, onEdit, onSort, sortKey, sortDir }) {
                   <td key={col.key} className={
                     col.key==='tier'?'td-tier': col.key==='priority'?'td-priority':
                     col.key==='followUp'?`td-followup ${fuClass}`: col.key==='owner'?'td-owner':
-                    col.key==='name'||col.key==='company'?'td-name': col.key==='firm'?'td-firm':
-                    col.key==='source'||col.key==='type'?'td-source':
-                    col.key==='captainsLog'||col.key==='notes'?'td-log': ''
+                    col.key==='company'?'td-name': col.key==='type'?'td-source':
+                    col.key==='notes'?'td-log': ''
                   }>{cfg.renderCell(inv, col, cfg)}</td>
                 ))}
               </tr>
@@ -637,7 +555,7 @@ function PipelineView({ investors, allInvestors, cfg, onEdit }) {
                   <div key={tier} className="tier-group">
                     <div className="tier-label" style={{color}}><span className="tier-dot" style={{background:color}} />Tier {tier}<span className="tier-count">{visible.length}</span></div>
                     {visible.map(inv => {
-                      const log = cfg.key === 'commercial' ? inv.notes : inv.captainsLog
+                      const log = inv.notes
                       const stale = getStaleDays(log)
                       const fu = inv.followUp || ''
                       const fuC = followUpStatus(fu)
@@ -648,8 +566,7 @@ function PipelineView({ investors, allInvestors, cfg, onEdit }) {
                             <div className="pipeline-card-name">{cfg.getName(inv)}</div>
                             {inv.tier && <span className="tier-badge-sm" style={{color:tc,borderColor:tc+'44',background:tc+'14'}}>{inv.tier}</span>}
                           </div>
-                          {cfg.key === 'investor' && <div className="pipeline-card-firm">{inv.firm||''}</div>}
-                          {cfg.key === 'commercial' && inv.targetNames && <div className="pipeline-card-firm">{inv.targetNames}</div>}
+                          {inv.targetNames && <div className="pipeline-card-firm">{inv.targetNames}</div>}
                           {fu && <div className={`pipeline-card-fu ${fuC}`}>Follow up: {fu}</div>}
                           {stale < 999 && <div className={`pipeline-card-stale ${stale>7?'stale-red':''}`}>{stale}d since last touch</div>}
                           <div className="pipeline-card-owner">{(inv[cfg.categoryField]||'').toUpperCase()}</div>
@@ -681,16 +598,12 @@ function EditPanel({ investor, cfg, onSave, onDelete, onClose }) {
     finally { setSaving(false) }
   }
 
-  const logField = cfg.key === 'commercial' ? 'notes' : 'captainsLog'
-  const logLabel = cfg.key === 'commercial' ? 'Notes' : "Captain's Log"
-
   return (
     <div className="edit-panel">
       <div className="panel-header">
         <div>
           <div className="panel-title">{isNew ? 'New Contact' : cfg.getName(investor)}</div>
           {!isNew && investor.id && <div className="panel-meta">ID: {investor.id}</div>}
-          {!isNew && investor.firmId && <div className="panel-meta">Firm ID: {investor.firmId}</div>}
         </div>
         <button className="btn-x" onClick={onClose}>
           <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" /></svg>
@@ -699,7 +612,7 @@ function EditPanel({ investor, cfg, onSave, onDelete, onClose }) {
       <div className="panel-body">
         {cfg.editFields(form, set)}
         <div className="field-row">
-          <FG label={cfg.key === 'commercial' ? 'Next Steps' : 'Status'}>
+          <FG label="Next Steps">
             <select value={form.status||''} onChange={e=>set('status',e.target.value)}>
               <option value="">— Unset —</option>
               {cfg.statuses.map(s => <option key={s} value={s}>{s}</option>)}
@@ -707,7 +620,8 @@ function EditPanel({ investor, cfg, onSave, onDelete, onClose }) {
           </FG>
           <FG label="Owner">
             <select value={form.owner||''} onChange={e=>set('owner',e.target.value)}>
-              <option value="">Unowned</option><option value="Sam">Sam</option><option value="JP">JP</option>
+              <option value="">Unowned</option>
+              {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </FG>
         </div>
@@ -724,8 +638,8 @@ function EditPanel({ investor, cfg, onSave, onDelete, onClose }) {
           <FG label="Follow Up"><input value={form.followUp||''} onChange={e=>set('followUp',e.target.value)} placeholder="4/10/2026" /></FG>
         </div>
         {cfg.editFields2(form, set, cfg.statuses)}
-        <FG label={logLabel}>
-          <textarea value={form[logField]||''} onChange={e=>set(logField,e.target.value)}
+        <FG label="Notes">
+          <textarea value={form.notes||''} onChange={e=>set('notes',e.target.value)}
             placeholder="Notes..." rows={7} />
         </FG>
       </div>
