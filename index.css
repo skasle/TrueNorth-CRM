@@ -7,9 +7,9 @@
   --border-hover: #2a3050;
   --text-primary: #e0e4f0;
   --text-secondary:#b8c2d8;
-  --text-muted: #8e9ab5;          /* was #4a5270 â€” 2.6:1 â†’ 5.3:1 on bg-primary */
+  --text-muted: #8e9ab5;
   --accent: #4f8ef7;
-  --accent-dark: #376edc;         /* used for btn-primary bg â€” white text 5.0:1 */
+  --accent-dark: #376edc;
   --accent-dim: rgba(79,142,247,0.15);
   --green: #43d981;
   --red: #e85454;
@@ -19,6 +19,20 @@
   --cyan: #26c4aa;
   --font-ui: 'DM Sans', sans-serif;
   --font-data: 'JetBrains Mono', monospace;
+}
+
+/* ── Light theme override ─────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  --bg-primary: #f7f8fb;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eef1f6;
+  --bg-card: #ffffff;
+  --border: #d6dbe5;
+  --border-hover: #b6bfd1;
+  --text-primary: #1a1f2e;
+  --text-secondary: #3d4a5f;
+  --text-muted: #6c7a93;
+  --accent-dim: rgba(79,142,247,0.12);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -67,6 +81,25 @@ body {
 .btn-danger:hover { background: rgba(232,84,84,0.1); }
 .btn-ghost { padding: 9px 14px; background: none; border: 1px solid var(--border-hover); border-radius: 7px; font-size: 13px; color: var(--text-secondary); font-family: var(--font-ui); cursor: pointer; transition: all 0.15s; }
 .btn-ghost:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+
+/* Theme toggle button */
+.btn-theme {
+  background: transparent;
+  border: 1px solid var(--border-hover);
+  color: var(--text-secondary);
+  width: 30px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  font-family: var(--font-ui);
+  line-height: 1;
+}
+.btn-theme:hover { border-color: var(--accent); color: var(--text-primary); }
 
 .user-chip { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); }
 .user-avatar { width: 26px; height: 26px; border-radius: 50%; }
@@ -149,7 +182,7 @@ td { padding: 10px 14px; font-size: 12px; color: var(--text-primary); vertical-a
 .loading-state { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 60px; color: var(--text-muted); font-family: var(--font-data); font-size: 12px; }
 .empty-state { display: flex; align-items: center; justify-content: center; padding: 80px; color: var(--text-muted); font-size: 13px; }
 
-/* â”€â”€ TIER, PRIORITY, SOURCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── TIER, PRIORITY, SOURCE ─────────────────────────────────────────────── */
 
 .td-tier { width: 60px; text-align: center; }
 .td-priority { width: 45px; text-align: center; font-family: var(--font-data); font-size: 12px; color: var(--text-secondary); }
@@ -170,7 +203,7 @@ td { padding: 10px 14px; font-size: 12px; color: var(--text-primary); vertical-a
 
 .panel-meta { font-size: 10px; font-family: var(--font-data); color: var(--text-muted); margin-top: 2px; letter-spacing: 0.03em; }
 
-/* â”€â”€ CRM NAV BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── CRM NAV BAR ─────────────────────────────────────────────────────────── */
 .crm-nav {
   display: flex;
   align-items: center;
@@ -180,6 +213,13 @@ td { padding: 10px 14px; font-size: 12px; color: var(--text-primary); vertical-a
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+.crm-nav-brand {
+  font-family: var(--font-data);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
 }
 .crm-nav-btn {
   padding: 6px 16px;
