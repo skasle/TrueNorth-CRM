@@ -55,6 +55,26 @@ const COMPANY_TYPES = [
   'Consultant', 'Partner', 'Other',
 ]
 
+// ── Value helpers ────────────────────────────────────────────────────────────
+
+function parseValue(v) {
+  if (v == null || v === '') return 0
+  if (typeof v === 'number') return v
+  return parseFloat(String(v).replace(/[$,\s]/g, '')) || 0
+}
+
+function formatCurrency(n) {
+  if (!n || n < 1) return '$0'
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2)}M`
+  if (n >= 1_000) return `$${Math.round(n / 1_000)}K`
+  return `$${Math.round(n).toLocaleString()}`
+}
+
+function formatCurrencyFull(n) {
+  if (!n || n < 1) return '$0'
+  return `$${Math.round(n).toLocaleString()}`
+}
+
 const CRM = {
   label: 'TrueNorth Pipeline',
   collection: 'commercial',
@@ -64,6 +84,19 @@ const CRM = {
     '7 - WON!':'#43d981', '4 - Agreement':'#26c4aa', '3 - SIP':'#f2b84b', '2 - Pitch':'#4f8ef7',
     '1 - Intro Meeting':'#a155e8', '0 - Outreach':'#f28b4b', '-1 - Research':'#7a8ba8',
     '5 - Nurture':'#a155e8', '-6 - Lost':'#e85454',
+  },
+  // Probability of close per stage. Tweak these freely — the summary bar and
+  // any expected-revenue calc reads directly from this map.
+  closeRates: {
+    '7 - WON!':       1.00,
+    '4 - Agreement':  0.75,
+    '3 - SIP':        0.50,
+    '2 - Pitch':      0.20,
+    '1 - Intro Meeting': 0.05,
+    '0 - Outreach':   0.02,
+    '-1 - Research':  0.01,
+    '5 - Nurture':    0.01,
+    '-6 - Lost':      0.00,
   },
   pipelineStages: [
     { key: '-1 - Research', color: '#7a8ba8' }, { key: '0 - Outreach', color: '#f28b4b' },
@@ -82,6 +115,7 @@ const CRM = {
     { key: 'targetNames', label: 'Contacts', sort: 'targetNames' },
     { key: 'type', label: 'Type', sort: 'type' },
     { key: 'status', label: 'Next Steps', sort: 'status' },
+    { key: 'projectValue', label: 'Value', sort: 'projectValue' },
     { key: 'followUp', label: 'Follow Up', sort: 'followUp' },
     { key: 'owner', label: 'Owner', sort: 'owner' },
     { key: 'notes', label: 'Notes' },
@@ -92,10 +126,11 @@ const CRM = {
     'Owner':'owner', 'Next Steps':'status', 'Follow-up due':'followUp',
     'Intro':'intro', 'Actively working an intro':'activeIntro',
     'Org description':'orgDescription', 'Opportunity':'opportunity', 'Notes':'notes',
+    'Project Value':'projectValue', 'Value':'projectValue', 'projectValue':'projectValue',
   },
   csvDocIdFields: ['ContactID', 'contactId'],
   csvSkipCheck: (row) => !(row['Company'] || row['company'] || '').trim() && !(row['Target names'] || row['targetNames'] || '').trim(),
-  exportHeaders: ['contactId','tier','priority','company','targetNames','type','geo','owner','status','followUp','intro','activeIntro','orgDescription','notes'],
+  exportHeaders: ['contactId','tier','priority','company','targetNames','type','geo','owner','status','projectValue','followUp','intro','activeIntro','orgDescription','notes'],
   editFields: (form, set) => (<>
     <FG label="Company"><input value={form.company||''} onChange={e=>set('company',e.target.value)} placeholder="Acme Bank" /></FG>
     <div className="field-row">
@@ -136,6 +171,7 @@ const CRM = {
     activeIntro: inv.activeIntro || '',
     orgDescription: inv.orgDescription || '',
     notes: inv.notes || '',
+    projectValue: inv.projectValue ?? '',
   }),
   renderCell: (inv, col, cfg) => {
     if (col.key === 'tier') {
@@ -149,6 +185,10 @@ const CRM = {
     if (col.key === 'status') {
       const c = cfg.statusColors[inv.status] || '#7a8ba8'
       return <span className="badge" style={{color:c,background:c+'18',borderColor:c+'44'}}>{inv.status||'Unset'}</span>
+    }
+    if (col.key === 'projectValue') {
+      const v = parseValue(inv.projectValue)
+      return v ? <span style={{fontWeight:600, fontVariantNumeric:'tabular-nums'}}>{formatCurrency(v)}</span> : <span className="td-muted">—</span>
     }
     if (col.key === 'followUp') return inv.followUp || '—'
     if (col.key === 'owner') return (inv.owner||'') || '—'
@@ -290,6 +330,7 @@ function CRMView({ cfg, user }) {
         if (sortKey === 'tierPriority') return sortDir * tierPrioritySort(a, b)
         if (sortKey === 'priority') return sortDir * ((parseInt(a.priority)||9999) - (parseInt(b.priority)||9999))
         if (sortKey === 'status') return sortDir * ((cfg.statusOrder[a.status]??99) - (cfg.statusOrder[b.status]??99))
+        if (sortKey === 'projectValue') return sortDir * (parseValue(a.projectValue) - parseValue(b.projectValue))
         const av = (sortKey === 'name' ? cfg.getName(a) : a[sortKey]||'').toString().toLowerCase()
         const bv = (sortKey === 'name' ? cfg.getName(b) : b[sortKey]||'').toString().toLowerCase()
         return av < bv ? -sortDir : av > bv ? sortDir : 0
@@ -324,6 +365,13 @@ function CRMView({ cfg, user }) {
 
   const saveInvestor = async (data) => {
     const { id, ...fields } = data
+    // Coerce projectValue to a number on save (if present), strip $ and commas
+    if (fields.projectValue !== undefined && fields.projectValue !== '') {
+      const num = parseValue(fields.projectValue)
+      fields.projectValue = num
+    } else if (fields.projectValue === '') {
+      fields.projectValue = 0
+    }
     try {
       if (id) {
         await updateDoc(doc(db, cfg.collection, id), { ...fields, updatedAt: serverTimestamp() })
@@ -376,6 +424,8 @@ function CRMView({ cfg, user }) {
             for (const [csvKey, fsKey] of Object.entries(cfg.csvFieldMap)) {
               if (row[csvKey] !== undefined && row[csvKey] !== '') inv[fsKey] = row[csvKey]
             }
+            // Coerce projectValue to number on import
+            if (inv.projectValue !== undefined) inv.projectValue = parseValue(inv.projectValue)
             let docId = null
             for (const f of cfg.csvDocIdFields) { if (row[f]) { docId = row[f]; break } }
             if (!docId) docId = String(Date.now() + count)
@@ -418,6 +468,8 @@ function CRMView({ cfg, user }) {
           </>)}
         </div>
       </header>
+
+      <PipelineSummaryBar investors={investors} cfg={cfg} />
 
       <div className="filter-bar">
         <div className="status-pills">
@@ -488,6 +540,124 @@ function CRMView({ cfg, user }) {
         {toasts.map(t => <div key={t.id} className={`toast toast-${t.type}`}>{t.msg}</div>)}
       </div>
     </>
+  )
+}
+
+// ── Pipeline Summary Bar ─────────────────────────────────────────────────────
+// Shows: total pipeline value, expected (probability-weighted) value,
+// total deals (excluding Lost), and per-stage counts/$/expected.
+
+function PipelineSummaryBar({ investors, cfg }) {
+  const stats = useMemo(() => {
+    const stages = {}
+    cfg.pipelineStages.forEach(s => {
+      stages[s.key] = { count: 0, value: 0, expected: 0, color: s.color, rate: cfg.closeRates[s.key] || 0 }
+    })
+    let totalValue = 0, expectedValue = 0, totalDeals = 0
+    for (const inv of investors) {
+      const status = inv.status
+      if (!status || status === '-6 - Lost') continue
+      const v = parseValue(inv.projectValue)
+      const rate = cfg.closeRates[status] || 0
+      const exp = v * rate
+      if (stages[status]) {
+        stages[status].count++
+        stages[status].value += v
+        stages[status].expected += exp
+      }
+      totalDeals++
+      totalValue += v
+      expectedValue += exp
+    }
+    return { stages, totalValue, expectedValue, totalDeals }
+  }, [investors, cfg])
+
+  return (
+    <div
+      className="pipeline-summary"
+      style={{
+        display: 'flex',
+        alignItems: 'stretch',
+        gap: 0,
+        padding: '10px 16px',
+        background: 'var(--bg-secondary, rgba(255,255,255,0.02))',
+        borderBottom: '1px solid var(--border, #2a3344)',
+        overflowX: 'auto',
+      }}
+    >
+      {/* Totals tile */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          padding: '4px 18px 4px 0',
+          marginRight: 14,
+          borderRight: '1px solid var(--border, #2a3344)',
+          minWidth: 180,
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ fontSize: 10, opacity: 0.55, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600 }}>
+          Pipeline
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+          {formatCurrency(stats.totalValue)}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.7, marginTop: 3 }}>
+          <span style={{ color: '#43d981', fontWeight: 600 }}>{formatCurrency(stats.expectedValue)}</span>
+          <span style={{ opacity: 0.55 }}> expected · {stats.totalDeals} {stats.totalDeals === 1 ? 'deal' : 'deals'}</span>
+        </div>
+      </div>
+
+      {/* Per-stage strip */}
+      <div style={{ display: 'flex', flex: 1, gap: 6, minWidth: 0 }}>
+        {cfg.pipelineStages.map(s => {
+          const st = stats.stages[s.key]
+          const stageName = s.key.replace(/^-?\d+\s*-\s*/, '')
+          const dim = st.count === 0
+          return (
+            <div
+              key={s.key}
+              title={`${s.key}\n${st.count} deals · ${formatCurrencyFull(st.value)} total · ${formatCurrencyFull(st.expected)} expected at ${Math.round(st.rate * 100)}%`}
+              style={{
+                flex: 1,
+                minWidth: 92,
+                padding: '6px 10px',
+                borderLeft: `3px solid ${s.color}`,
+                background: 'var(--bg-card, rgba(255,255,255,0.025))',
+                borderRadius: '0 4px 4px 0',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                opacity: dim ? 0.5 : 1,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: s.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {stageName}
+                </span>
+                <span style={{ fontSize: 10, opacity: 0.55, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                  {Math.round(st.rate * 100)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {st.count}
+                <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 400, marginLeft: 4 }}>
+                  {st.count === 1 ? 'deal' : 'deals'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
+                {formatCurrency(st.value)}
+              </div>
+              <div style={{ fontSize: 10, color: '#43d981', opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>
+                {formatCurrency(st.expected)} exp
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -579,6 +749,7 @@ function TableView({ investors, cfg, onEdit, onSort, sortKey, sortDir, selectedI
                     col.key==='tier'?'td-tier': col.key==='priority'?'td-priority':
                     col.key==='followUp'?`td-followup ${fuClass}`: col.key==='owner'?'td-owner':
                     col.key==='company'?'td-name': col.key==='type'?'td-source':
+                    col.key==='projectValue'?'td-value':
                     col.key==='notes'?'td-log': ''
                   }>{cfg.renderCell(inv, col, cfg)}</td>
                 ))}
@@ -605,7 +776,10 @@ function PipelineView({ investors, allInvestors, cfg, onEdit, selectedId }) {
       }
       const untiered = cards.filter(i => !i.tier || !TIERS.includes(i.tier))
       if (untiered.length) tiered.push({ tier: 'Untiered', color: '#3d4a5f', cards: untiered })
-      cols[stage.key] = { tiered, total: cards.length }
+      const totalValue = cards.reduce((sum, i) => sum + parseValue(i.projectValue), 0)
+      const rate = cfg.closeRates[stage.key] || 0
+      const expectedValue = totalValue * rate
+      cols[stage.key] = { tiered, total: cards.length, totalValue, expectedValue, rate }
     }
     return cols
   }, [allInvestors, cfg])
@@ -615,12 +789,22 @@ function PipelineView({ investors, allInvestors, cfg, onEdit, selectedId }) {
   return (
     <div className="pipeline">
       {cfg.pipelineStages.map(stage => {
-        const col = columns[stage.key] || { tiered: [], total: 0 }
+        const col = columns[stage.key] || { tiered: [], total: 0, totalValue: 0, expectedValue: 0, rate: 0 }
         return (
           <div key={stage.key} className="pipeline-col">
             <div className="pipeline-col-header" style={{borderTopColor:stage.color}}>
-              <span className="pipeline-col-title">{stage.key.toUpperCase()}</span>
-              <span className="pipeline-col-count">{col.total}</span>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8}}>
+                <span className="pipeline-col-title">{stage.key.toUpperCase()}</span>
+                <span className="pipeline-col-count">{col.total}</span>
+              </div>
+              {col.totalValue > 0 && (
+                <div style={{fontSize:10, opacity:0.7, marginTop:4, lineHeight:1.4, fontVariantNumeric:'tabular-nums'}}>
+                  <div>{formatCurrency(col.totalValue)} total</div>
+                  <div style={{color:'#43d981', opacity:0.85}}>
+                    {formatCurrency(col.expectedValue)} exp · {Math.round(col.rate * 100)}%
+                  </div>
+                </div>
+              )}
             </div>
             <div className="pipeline-cards">
               {col.tiered.map(({tier, color, cards}) => {
@@ -636,6 +820,7 @@ function PipelineView({ investors, allInvestors, cfg, onEdit, selectedId }) {
                       const fuC = followUpStatus(fu)
                       const tc = TIER_COLORS[inv.tier] || null
                       const isSelected = inv.id === selectedId
+                      const pv = parseValue(inv.projectValue)
                       return (
                         <div
                           key={inv.id}
@@ -648,6 +833,7 @@ function PipelineView({ investors, allInvestors, cfg, onEdit, selectedId }) {
                             {inv.tier && <span className="tier-badge-sm" style={{color:tc,borderColor:tc+'44',background:tc+'14'}}>{inv.tier}</span>}
                           </div>
                           {inv.targetNames && <div className="pipeline-card-firm">{inv.targetNames}</div>}
+                          {pv > 0 && <div style={{fontSize:11, fontWeight:600, marginTop:4, fontVariantNumeric:'tabular-nums', opacity:0.85}}>{formatCurrency(pv)}</div>}
                           {fu && <div className={`pipeline-card-fu ${fuC}`}>Follow up: {fu}</div>}
                           {stale < 999 && <div className={`pipeline-card-stale ${stale>7?'stale-red':''}`}>{stale}d since last touch</div>}
                           <div className="pipeline-card-owner">{(inv[cfg.categoryField]||'').toUpperCase()}</div>
@@ -696,6 +882,11 @@ function EditPanel({ investor, cfg, onSave, onDelete, onClose, docked }) {
 
   const bodyStyle = docked ? { flex: 1, overflowY: 'auto', minHeight: 0 } : {}
 
+  // Live expected-value preview based on current form values
+  const formValue = parseValue(form.projectValue)
+  const formRate = cfg.closeRates[form.status] || 0
+  const formExpected = formValue * formRate
+
   return (
     <div className="edit-panel" style={panelStyle}>
       <div className="panel-header">
@@ -721,6 +912,25 @@ function EditPanel({ investor, cfg, onSave, onDelete, onClose, docked }) {
               <option value="">Unowned</option>
               {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
+          </FG>
+        </div>
+        <div className="field-row">
+          <FG label="Project Value ($)">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.projectValue ?? ''}
+              onChange={e=>set('projectValue', e.target.value)}
+              placeholder="50000"
+            />
+          </FG>
+          <FG label={`Expected (${Math.round(formRate * 100)}% close)`}>
+            <input
+              type="text"
+              value={formExpected ? formatCurrencyFull(formExpected) : '—'}
+              readOnly
+              style={{opacity: 0.7, cursor: 'default'}}
+            />
           </FG>
         </div>
         <div className="field-row">
