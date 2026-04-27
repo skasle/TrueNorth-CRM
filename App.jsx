@@ -189,6 +189,10 @@ function tierPrioritySort(a, b) {
   return (parseInt(a.priority)||9999) - (parseInt(b.priority)||9999)
 }
 
+// ── Layout constants ─────────────────────────────────────────────────────────
+
+const PANEL_WIDTH = 440  // px, docked right side panel
+
 // ── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -241,8 +245,7 @@ function CRMView({ cfg, user }) {
   const [catFilter, setCatFilter] = useState('ANY')
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState(1)
-  const [editInv, setEditInv] = useState(null)
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [editInv, setEditInv] = useState(null)  // null = empty state, {} = new contact, {id, ...} = existing
   const [toasts, setToasts] = useState([])
   const searchRef = useRef(null)
 
@@ -325,13 +328,15 @@ function CRMView({ cfg, user }) {
       if (id) {
         await updateDoc(doc(db, cfg.collection, id), { ...fields, updatedAt: serverTimestamp() })
         setInvestors(prev => prev.map(inv => inv.id === id ? { ...inv, ...fields } : inv))
+        setEditInv({ id, ...fields })  // keep panel showing the saved record
         toast('Saved')
       } else {
         const ref = await addDoc(collection(db, cfg.collection), { ...fields, createdAt: serverTimestamp() })
-        setInvestors(prev => [{ id: ref.id, ...fields }, ...prev])
+        const created = { id: ref.id, ...fields }
+        setInvestors(prev => [created, ...prev])
+        setEditInv(created)  // keep panel showing the newly created record
         toast('Contact added')
       }
-      setPanelOpen(false); setEditInv(null)
     } catch (e) { toast('Error: ' + e.message, 'error') }
   }
 
@@ -340,7 +345,7 @@ function CRMView({ cfg, user }) {
     try {
       await deleteDoc(doc(db, cfg.collection, id))
       setInvestors(prev => prev.filter(inv => inv.id !== id))
-      setPanelOpen(false); setEditInv(null); toast('Deleted')
+      setEditInv(null); toast('Deleted')
     } catch (e) { toast('Error: ' + e.message, 'error') }
   }
 
@@ -390,8 +395,10 @@ function CRMView({ cfg, user }) {
   }
 
   const sortBy = (key) => { setSortDir(prev => sortKey === key ? prev * -1 : 1); setSortKey(key) }
-  const openEdit = (inv) => { setEditInv(inv); setPanelOpen(true) }
-  const openNew = () => { setEditInv({}); setPanelOpen(true) }
+  const openEdit = (inv) => setEditInv(inv)
+  const openNew = () => setEditInv({})
+  const clearPanel = () => setEditInv(null)
+  const selectedId = editInv?.id || null
 
   return (
     <>
@@ -452,23 +459,53 @@ function CRMView({ cfg, user }) {
         <div className="filter-count">{filtered.length} shown &nbsp; {investors.length} total</div>
       </div>
 
-      <div className="main-content">
-        {loading ? <div className="loading-state"><div className="spinner" /> Loading...</div>
-          : view === 'table'
-            ? <TableView investors={filtered} cfg={cfg} onEdit={openEdit} onSort={sortBy} sortKey={sortKey} sortDir={sortDir} />
-            : <PipelineView investors={filtered} allInvestors={investors} cfg={cfg} onEdit={openEdit} />}
+      <div className="workspace" style={{display:'flex', flex:1, minHeight:0, overflow:'hidden'}}>
+        <div className="main-content" style={{flex:1, minWidth:0, overflow:'auto'}}>
+          {loading ? <div className="loading-state"><div className="spinner" /> Loading...</div>
+            : view === 'table'
+              ? <TableView investors={filtered} cfg={cfg} onEdit={openEdit} onSort={sortBy} sortKey={sortKey} sortDir={sortDir} selectedId={selectedId} />
+              : <PipelineView investors={filtered} allInvestors={investors} cfg={cfg} onEdit={openEdit} selectedId={selectedId} />}
+        </div>
+        <aside
+          className="side-panel"
+          style={{
+            width: PANEL_WIDTH,
+            flexShrink: 0,
+            borderLeft: '1px solid var(--border, #2a3344)',
+            background: 'var(--bg-panel, var(--bg, #0e1420))',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          {editInv
+            ? <EditPanel investor={editInv} cfg={cfg} onSave={saveInvestor} onDelete={deleteInvestor} onClose={clearPanel} docked />
+            : <EmptyPanel onNew={openNew} />}
+        </aside>
       </div>
-
-      {panelOpen && (<>
-        <div className="overlay" onClick={()=>setPanelOpen(false)} />
-        <EditPanel investor={editInv} cfg={cfg} onSave={saveInvestor} onDelete={deleteInvestor}
-          onClose={()=>{setPanelOpen(false);setEditInv(null)}} />
-      </>)}
 
       <div className="toast-container">
         {toasts.map(t => <div key={t.id} className={`toast toast-${t.type}`}>{t.msg}</div>)}
       </div>
     </>
+  )
+}
+
+// ── Empty Panel State ─────────────────────────────────────────────────────────
+
+function EmptyPanel({ onNew }) {
+  return (
+    <div style={{
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      height:'100%', padding:'40px 24px', textAlign:'center', gap:14,
+    }}>
+      <div style={{fontSize:40, opacity:0.3}}>◧</div>
+      <div style={{fontSize:14, fontWeight:600, opacity:0.8}}>No contact selected</div>
+      <div style={{fontSize:13, opacity:0.55, lineHeight:1.5, maxWidth:280}}>
+        Click any row to view and edit details here. Or add a new contact to get started.
+      </div>
+      <button className="btn-primary" onClick={onNew} style={{marginTop:8}}>+ Add Contact</button>
+    </div>
   )
 }
 
@@ -514,7 +551,7 @@ function AuthScreen({ theme, toggleTheme }) {
 
 // ── Table View ────────────────────────────────────────────────────────────────
 
-function TableView({ investors, cfg, onEdit, onSort, sortKey, sortDir }) {
+function TableView({ investors, cfg, onEdit, onSort, sortKey, sortDir, selectedId }) {
   if (!investors.length) return <div className="empty-state">No contacts match your filters.</div>
   const si = (key) => sortKey === key ? (sortDir > 0 ? ' ↑' : ' ↓') : ''
   return (
@@ -529,8 +566,14 @@ function TableView({ investors, cfg, onEdit, onSort, sortKey, sortDir }) {
         <tbody>
           {investors.map(inv => {
             const fuClass = followUpStatus(inv.followUp || '')
+            const isSelected = inv.id === selectedId
             return (
-              <tr key={inv.id} onClick={()=>onEdit(inv)}>
+              <tr
+                key={inv.id}
+                onClick={()=>onEdit(inv)}
+                className={isSelected ? 'row-selected' : ''}
+                style={isSelected ? {background:'var(--row-selected-bg, rgba(79,142,247,0.12))', boxShadow:'inset 3px 0 0 var(--accent, #4f8ef7)'} : {}}
+              >
                 {cfg.columns.map(col => (
                   <td key={col.key} className={
                     col.key==='tier'?'td-tier': col.key==='priority'?'td-priority':
@@ -550,7 +593,7 @@ function TableView({ investors, cfg, onEdit, onSort, sortKey, sortDir }) {
 
 // ── Pipeline View ─────────────────────────────────────────────────────────────
 
-function PipelineView({ investors, allInvestors, cfg, onEdit }) {
+function PipelineView({ investors, allInvestors, cfg, onEdit, selectedId }) {
   const columns = useMemo(() => {
     const cols = {}
     for (const stage of cfg.pipelineStages) {
@@ -592,8 +635,14 @@ function PipelineView({ investors, allInvestors, cfg, onEdit }) {
                       const fu = inv.followUp || ''
                       const fuC = followUpStatus(fu)
                       const tc = TIER_COLORS[inv.tier] || null
+                      const isSelected = inv.id === selectedId
                       return (
-                        <div key={inv.id} className={`pipeline-card ${stale>7?'stale':''}`} onClick={()=>onEdit(inv)}>
+                        <div
+                          key={inv.id}
+                          className={`pipeline-card ${stale>7?'stale':''} ${isSelected?'card-selected':''}`}
+                          onClick={()=>onEdit(inv)}
+                          style={isSelected ? {outline:'2px solid var(--accent, #4f8ef7)', outlineOffset:'-2px'} : {}}
+                        >
                           <div className="pipeline-card-top">
                             <div className="pipeline-card-name">{cfg.getName(inv)}</div>
                             {inv.tier && <span className="tier-badge-sm" style={{color:tc,borderColor:tc+'44',background:tc+'14'}}>{inv.tier}</span>}
@@ -618,11 +667,14 @@ function PipelineView({ investors, allInvestors, cfg, onEdit }) {
 
 // ── Edit Panel ────────────────────────────────────────────────────────────────
 
-function EditPanel({ investor, cfg, onSave, onDelete, onClose }) {
+function EditPanel({ investor, cfg, onSave, onDelete, onClose, docked }) {
   const isNew = !investor.id
   const [form, setForm] = useState(cfg.initForm(investor))
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // Re-sync form whenever a different record is selected
+  useEffect(() => { setForm(cfg.initForm(investor)) }, [investor.id, investor])
 
   const handleSave = async () => {
     setSaving(true)
@@ -630,18 +682,32 @@ function EditPanel({ investor, cfg, onSave, onDelete, onClose }) {
     finally { setSaving(false) }
   }
 
+  // When docked (always-open mode), render without fixed positioning so it sits inside the layout flex
+  const panelStyle = docked ? {
+    position: 'static',
+    width: '100%',
+    height: '100%',
+    transform: 'none',
+    boxShadow: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  } : {}
+
+  const bodyStyle = docked ? { flex: 1, overflowY: 'auto', minHeight: 0 } : {}
+
   return (
-    <div className="edit-panel">
+    <div className="edit-panel" style={panelStyle}>
       <div className="panel-header">
         <div>
           <div className="panel-title">{isNew ? 'New Contact' : cfg.getName(investor)}</div>
           {!isNew && investor.id && <div className="panel-meta">ID: {investor.id}</div>}
         </div>
-        <button className="btn-x" onClick={onClose}>
+        <button className="btn-x" onClick={onClose} title="Clear panel">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" /></svg>
         </button>
       </div>
-      <div className="panel-body">
+      <div className="panel-body" style={bodyStyle}>
         {cfg.editFields(form, set)}
         <div className="field-row">
           <FG label="Next Steps">
